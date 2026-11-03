@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>라쿠텐 상품 찾기 & 추천</title>
+<style>
+  :root { --fg:#1f2328; --muted:#59636e; --line:#d8dee4; --accent:#0969da; --bg:#fff; --soft:#f6f8fa; --good:#1a7f37; --bad:#cf222e; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif; color:var(--fg); background:var(--bg); font-size:16px; line-height:1.5; }
+  header { position:sticky; top:0; background:var(--bg); border-bottom:1px solid var(--line); padding:12px 14px; z-index:5; }
+  h1 { font-size:1.1rem; margin:0 0 8px; }
+  main { padding:12px 14px 60px; max-width:720px; margin:0 auto; }
+  details { border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin:10px 0; background:var(--soft); }
+  summary { cursor:pointer; font-weight:600; }
+  label { display:block; font-size:0.85rem; color:var(--muted); margin:8px 0 2px; }
+  input, select, button { font:inherit; width:100%; padding:10px; border:1px solid var(--line); border-radius:8px; background:#fff; }
+  .row { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  button { background:var(--accent); color:#fff; border:none; font-weight:600; margin-top:10px; }
+  button.secondary { background:#fff; color:var(--accent); border:1px solid var(--accent); }
+  .status { font-size:0.9rem; color:var(--muted); margin:8px 0; min-height:1.2em; }
+  .card { border:1px solid var(--line); border-radius:12px; padding:12px; margin:10px 0; }
+  .card h2 { font-size:0.98rem; margin:0 0 4px; }
+  .ko { color:var(--fg); font-weight:600; }
+  .ja { color:var(--muted); font-size:0.85rem; }
+  .meta { font-size:0.88rem; color:var(--muted); margin:6px 0; }
+  .pill { display:inline-block; font-size:0.78rem; padding:2px 8px; border-radius:999px; border:1px solid var(--line); margin:2px 4px 2px 0; }
+  .pill.good { color:var(--good); border-color:#9fd3ad; }
+  .pill.bad { color:var(--bad); border-color:#f0b4b8; }
+  .score { font-size:1.2rem; font-weight:700; }
+  .rank { color:var(--muted); font-size:0.85rem; }
+  .small { font-size:0.82rem; color:var(--muted); }
+  a { color:var(--accent); }
+  .warn { background:#fff8e5; border:1px solid #e8d28a; border-radius:10px; padding:10px 12px; font-size:0.9rem; margin:10px 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>라쿠텐 상품 찾기 & 추천</h1>
+  <div class="row">
+    <input id="keyword" placeholder="검색어 (일본어 권장, 예: 掃除機)" enterkeyhint="search">
+    <button id="searchBtn" style="margin-top:0">검색</button>
+  </div>
+  <div class="status" id="status"></div>
+</header>
+
+<main>
+  <div class="warn">
+    주문은 이 페이지에서 하지 않습니다. 라쿠텐은 자동화된 주문을 금지하므로, 추천 상품은 링크로 열어서 직접 주문하세요.
+  </div>
+
+  <details id="settingsBox" open>
+    <summary>API 설정 (이 휴대폰에만 저장됨)</summary>
+    <label>라쿠텐 applicationId</label>
+    <input id="appId" autocomplete="off">
+    <label>라쿠텐 accessKey</label>
+    <input id="accessKey" autocomplete="off">
+    <label>Google Translate API 키 (번역을 쓸 때만)</label>
+    <input id="gKey" autocomplete="off">
+    <div class="small">키는 이 브라우저 localStorage에만 저장되며 외부로 보내지 않습니다(라쿠텐·구글 API 호출 외). 구글 키는 Cloud Console에서 API 제한을 걸어 두세요. 라쿠텐 API는 앱에 등록한 웹사이트 주소에서 열린 페이지에서 호출해야 할 수 있습니다.</div>
+    <button class="secondary" id="saveSettings">설정 저장</button>
+  </details>
+
+  <details>
+    <summary>검색 조건 / 마진 계산</summary>
+    <div class="row">
+      <div><label>최소가 (엔)</label><input id="minPrice" type="number" inputmode="numeric" placeholder="0"></div>
+      <div><label>최대가 (엔)</label><input id="maxPrice" type="number" inputmode="numeric" placeholder="제한 없음"></div>
+    </div>
+    <div class="row">
+      <div><label>최소 리뷰 수</label><input id="minReviews" type="number" inputmode="numeric" value="10"></div>
+      <div><label>가져올 개수 (최대 30)</label><input id="hits" type="number" inputmode="numeric" value="30"></div>
+    </div>
+    <hr style="border:none;border-top:1px solid var(--line);margin:12px 0">
+    <div class="row">
+      <div><label>환율 (원/엔)</label><input id="rate" type="number" inputmode="decimal" value="9.0" step="0.01"></div>
+      <div><label>예상 판매가 (원)</label><input id="sellKrw" type="number" inputmode="numeric" placeholder="예: 25000"></div>
+    </div>
+    <div class="row">
+      <div><label>관세·부가세 (%)</label><input id="dutyPct" type="number" inputmode="decimal" value="0"></div>
+      <div><label>배대지 비용 (원/개)</label><input id="forwardKrw" type="number" inputmode="numeric" value="0"></div>
+    </div>
+    <div class="row">
+      <div><label>판매 수수료 (%)</label><input id="feePct" type="number" inputmode="decimal" value="0"></div>
+      <div><label>정렬</label>
+        <select id="sortBy">
+          <option value="score">추천 점수순</option>
+          <option value="margin">예상 마진순</option>
+          <option value="reviews">리뷰 많은 순</option>
+          <option value="priceAsc">낮은 가격순</option>
+        </select>
+      </div>
+    </div>
+    <div class="small">환율, 관세, 배대지 비용, 수수료는 본인이 확인한 값을 넣으세요. 예상 판매가를 넣어야 마진이 계산됩니다.</div>
+    <button class="secondary" id="saveFilters">조건 저장</button>
+  </details>
+
+  <div id="results"></div>
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  const RAKUTEN_URL = "https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20220601";
+  const GOOGLE_URL = "https://translation.googleapis.com/language/translate/v2";
+  const KEYS = ["appId", "accessKey", "gKey"];
+  const FILTER_KEYS = ["minPrice", "maxPrice", "minReviews", "hits", "rate", "sellKrw", "dutyPct", "forwardKrw", "feePct", "sortBy"];
+
+  let items = [];   // 검색 결과 (가공 후)
+
+  const $ = (id) => document.getElementById(id);
+  const setStatus = (msg) => { $("status").textContent = msg; };
+
+  // ---------- 저장/불러오기 ----------
+  function loadSaved() {
+    KEYS.forEach(k => { $(k === "appId" ? "appId" : k).value = localStorage.getItem("rk_" + k) || ""; });
+    FILTER_KEYS.forEach(k => {
+      const v = localStorage.getItem("rk_f_" + k);
+      if (v !== null && $(k)) $(k).value = v;
+    });
+    if (localStorage.getItem("rk_appId")) $("settingsBox").open = false;
+  }
+  $("saveSettings").onclick = () => {
+    KEYS.forEach(k => localStorage.setItem("rk_" + k, $(k).value.trim()));
+    $("settingsBox").open = false;
+    setStatus("설정을 저장했습니다.");
+  };
+  $("saveFilters").onclick = () => {
+    FILTER_KEYS.forEach(k => { if ($(k)) localStorage.setItem("rk_f_" + k, $(k).value); });
+    setStatus("조건을 저장했습니다.");
+    if (items.length) render();
+  };
+
+  // ---------- 유틸 ----------
+  const num = (id, fallback) => {
+    const v = parseFloat($(id).value);
+    return isNaN(v) ? fallback : v;
+  };
+  const fmt = (n) => (n == null || isNaN(n)) ? "-" : Math.round(n).toLocaleString("ko-KR");
+  const NUM_RE = /\d+(?:[.,]\d+)?/g;
+  const numSet = (s) => new Set(((s || "").normalize("NFKC")).match(NUM_RE) || []);
+
+  function flagsFor(captionJa, captionKo, nameJa, nameKo) {
+    const flags = [];
+    const src = new Set([...numSet(captionJa), ...numSet(nameJa)]);
+    const dst = new Set([...numSet(captionKo), ...numSet(nameKo)]);
+    const missing = [...src].filter(x => !dst.has(x));
+    const added = [...dst].filter(x => !src.has(x));
+    if (missing.length) flags.push("숫자 누락: " + missing.join(", "));
+    if (added.length) flags.push("숫자 추가: " + added.join(", "));
+    if (/[぀-ヿ]/.test(captionKo + nameKo)) flags.push("일본어 잔존");
+    return flags;
+  }
+
+  // 점수: 평점(0~5)과 리뷰 수(로그 스케일)를 반반 반영한 단순 휴리스틱
+  function recommendScore(it) {
+    const r = Math.min(Math.max(it.reviewAverage || 0, 0), 5) / 5;
+    const n = Math.min(Math.log10((it.reviewCount || 0) + 1) / 3, 1);
+    return Math.round((r * 0.5 + n * 0.5) * 100);
+  }
+
+  // 원가 = 엔화가격 × 환율 × (1 + 관세%) + 배대지 비용
+  // 마진 = 판매가 − 원가 − 판매가 × 수수료%
+  function marginFor(it) {
+    const sell = num("sellKrw", NaN);
+    if (isNaN(sell) || sell <= 0) return null;
+    const rate = num("rate", 9);
+    const duty = num("dutyPct", 0) / 100;
+    const forward = num("forwardKrw", 0);
+    const fee = num("feePct", 0) / 100;
+    const cost = (it.price || 0) * rate * (1 + duty) + forward;
+    const margin = sell - cost - sell * fee;
+    return { cost, margin, marginPct: margin / sell * 100 };
+  }
+
+  // ---------- API ----------
+  async function searchRakuten(keyword) {
+    const appId = localStorage.getItem("rk_appId");
+    const accessKey = localStorage.getItem("rk_accessKey");
+    if (!appId || !accessKey) throw new Error("설정에서 applicationId와 accessKey를 먼저 저장하세요.");
+    const hits = Math.min(Math.max(num("hits", 30), 1), 30);
+    const p = new URLSearchParams({
+      applicationId: appId, accessKey, keyword, hits: String(hits),
+      format: "json", formatVersion: "2", sort: "standard",
+    });
+    const minP = $("minPrice").value, maxP = $("maxPrice").value;
+    if (minP) p.set("minPrice", minP);
+    if (maxP) p.set("maxPrice", maxP);
+    const res = await fetch(RAKUTEN_URL + "?" + p.toString());
+    if (!res.ok) throw new Error("라쿠텐 API 오류 " + res.status + " (키, 등록 웹사이트 주소, 호출 위치를 확인하세요)");
+    const data = await res.json();
+    const seen = new Set();
+    return (data.Items || []).map(e => e.Item || e).filter(it => {
+      if (!it.itemCode || seen.has(it.itemCode)) return false;
+      seen.add(it.itemCode);
+      return true;
+    }).map(it => ({
+      code: it.itemCode,
+      nameJa: it.itemName || "",
+      captionJa: it.itemCaption || "",
+      price: Number(it.itemPrice) || 0,
+      shop: it.shopName || "",
+      reviewCount: Number(it.reviewCount) || 0,
+      reviewAverage: Number(it.reviewAverage) || 0,
+      url: it.itemUrl || "",
+      availability: it.availability,
+    }));
+  }
+
+  async function translateBatch(texts) {
+    const key = localStorage.getItem("rk_gKey");
+    if (!key) return texts.map(() => "");
+    const out = [];
+    for (let i = 0; i < texts.length; i += 100) {
+      const chunk = texts.slice(i, i + 100);
+      const res = await fetch(GOOGLE_URL + "?key=" + encodeURIComponent(key), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ q: chunk, source: "ja", target: "ko", format: "text" }),
+      });
+      if (!res.ok) throw new Error("번역 API 오류 " + res.status);
+      const data = await res.json();
+      data.data.translations.forEach(t => out.push(t.translatedText));
+    }
+    return out;
+  }
+
+  // ---------- 검색 실행 ----------
+  $("searchBtn").onclick = runSearch;
+  $("keyword").addEventListener("keydown", e => { if (e.key === "Enter") runSearch(); });
+
+  async function runSearch() {
+    const kw = $("keyword").value.trim();
+    if (!kw) { setStatus("검색어를 입력하세요."); return; }
+    try {
+      setStatus("라쿠텐 검색 중...");
+      const base = await searchRakuten(kw);
+      setStatus(`상품 ${base.length}개 수집. 번역 중...`);
+      const nameKo = await translateBatch(base.map(b => b.nameJa));
+      const capKo = await translateBatch(base.map(b => b.captionJa));
+      items = base.map((b, i) => ({
+        ...b,
+        nameKo: nameKo[i] || "",
+        captionKo: capKo[i] || "",
+        flags: nameKo[i] ? flagsFor(b.captionJa, capKo[i], b.nameJa, nameKo[i]) : [],
+      }));
+      setStatus(localStorage.getItem("rk_gKey") ? `완료: ${items.length}개` : `완료: ${items.length}개 (번역 키가 없어 일본어로만 표시)`);
+      render();
+    } catch (err) {
+      setStatus("오류: " + err.message);
+    }
+  }
+
+  // ---------- 렌더링 ----------
+  function render() {
+    const minReviews = num("minReviews", 0);
+    const minP = num("minPrice", 0), maxP = num("maxPrice", Infinity);
+    let list = items.filter(it =>
+      it.reviewCount >= minReviews && it.price >= minP && it.price <= maxP
+    ).map(it => ({ ...it, score: recommendScore(it), calc: marginFor(it) }));
+
+    const sortBy = $("sortBy").value;
+    list.sort((a, b) => {
+      if (sortBy === "margin") return (b.calc ? b.calc.margin : -Infinity) - (a.calc ? a.calc.margin : -Infinity);
+      if (sortBy === "reviews") return b.reviewCount - a.reviewCount;
+      if (sortBy === "priceAsc") return a.price - b.price;
+      return b.score - a.score;
+    });
+
+    const root = $("results");
+    root.textContent = "";
+    if (!list.length) {
+      const p = document.createElement("p");
+      p.className = "small";
+      p.textContent = "조건에 맞는 상품이 없습니다. 최소 리뷰 수나 가격 조건을 낮춰 보세요.";
+      root.appendChild(p);
+      return;
+    }
+    list.forEach((it, idx) => root.appendChild(card(it, idx + 1)));
+  }
+
+  function el(tag, cls, text) {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  }
+
+  function card(it, rank) {
+    const c = el("div", "card");
+    c.appendChild(el("div", "rank", `#${rank} · 추천 점수 ${it.score}점`));
+    c.appendChild(el("div", "ko", it.nameKo || "(번역 없음)"));
+    c.appendChild(el("div", "ja", it.nameJa));
+
+    const meta = el("div", "meta");
+    meta.textContent = `${fmt(it.price)}엔 · 리뷰 ${fmt(it.reviewCount)}개 · 평점 ${it.reviewAverage.toFixed(2)} · ${it.shop}`;
+    c.appendChild(meta);
+
+    if (it.calc) {
+      const m = el("div", "meta");
+      const good = it.calc.margin > 0;
+      const pill = el("span", "pill " + (good ? "good" : "bad"),
+        `예상 마진 ${fmt(it.calc.margin)}원 (${it.calc.marginPct.toFixed(1)}%)`);
+      m.appendChild(pill);
+      m.appendChild(el("span", "small", `원가 약 ${fmt(it.calc.cost)}원`));
+      c.appendChild(m);
+    } else {
+      c.appendChild(el("div", "small", "예상 판매가를 입력하면 마진이 표시됩니다."));
+    }
+
+    if (it.captionKo) {
+      c.appendChild(el("div", "small", it.captionKo.length > 160 ? it.captionKo.slice(0, 160) + "..." : it.captionKo));
+    }
+    it.flags.forEach(f => c.appendChild(el("span", "pill bad", "확인: " + f)));
+
+    if (it.url) {
+      const a = el("a", "", "라쿠텐에서 상품 열기 (직접 주문)");
+      a.href = it.url;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      a.style.display = "inline-block";
+      a.style.marginTop = "6px";
+      c.appendChild(a);
+    }
+    return c;
+  }
+
+  // 조건 변경 시 즉시 다시 그리기
+  ["minPrice","maxPrice","minReviews","rate","sellKrw","dutyPct","forwardKrw","feePct","sortBy"].forEach(id => {
+    $(id).addEventListener("change", () => { if (items.length) render(); });
+  });
+
+  loadSaved();
+})();
+</script>
+</body>
+</html>
